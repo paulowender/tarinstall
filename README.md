@@ -64,3 +64,22 @@ The script will:
 4. Make the application globally accessible
 
 You can run the installed application by typing its name in the terminal or finding it in your applications menu.
+
+## Buy Me a Coffee ☕
+
+If this script helped you save time, consider buying me a coffee! 
+
+```ascii
+    ( (
+     ) )
+  .........
+  |       |]
+  \       /
+   `---'
+```
+
+**PIX Key (Brazil):** `opaulowender@gmail.com`
+
+Every coffee helps fuel more open source tools! Your support keeps me coding and caffeinated. 🚀
+
+---
