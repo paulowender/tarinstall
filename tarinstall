@@ -1,0 +1,71 @@
+#!/bin/bash
+
+# Verifica se o usuário passou um arquivo como argumento
+if [ -z "$1" ]; then
+    echo "Uso: tarinstall <arquivo.tar.gz>"
+    exit 1
+fi
+
+# Obtém o caminho absoluto do arquivo
+FILE=$(realpath "$1")
+
+# Verifica se o arquivo existe
+if [ ! -f "$FILE" ]; then
+    echo "Erro: Arquivo não encontrado!"
+    exit 1
+fi
+
+# Obtém o nome do programa sem extensão, removendo padrões comuns
+FILENAME=$(basename "$FILE")
+APPNAME=$(echo "$FILENAME" | sed -E 's/(-linux|-x64|_x64|-amd64|_amd64|.tar.gz)//g')
+
+# Pergunta ao usuário se deseja alterar o nome
+read -p "Nome do aplicativo (padrão: $APPNAME): " NEWNAME
+if [ -n "$NEWNAME" ]; then
+    APPNAME="$NEWNAME"
+fi
+
+# Define a pasta de instalação em /opt
+INSTALL_DIR="/opt/$APPNAME"
+
+# Remove instalação anterior, se existir
+if [ -d "$INSTALL_DIR" ]; then
+    sudo rm -rf "$INSTALL_DIR"
+fi
+
+# Extrai para /opt
+echo "Extraindo para $INSTALL_DIR..."
+sudo mkdir -p "$INSTALL_DIR"
+sudo tar -xvzf "$FILE" -C "$INSTALL_DIR" --strip-components=1
+
+# Procura o executável dentro da pasta extraída
+EXECUTABLE=$(find "$INSTALL_DIR" -maxdepth 1 -type f -executable | head -n 1)
+
+if [ -z "$EXECUTABLE" ]; then
+    echo "Erro: Nenhum executável encontrado em $INSTALL_DIR"
+    exit 1
+fi
+
+# Cria um link simbólico para executar o programa de qualquer lugar
+sudo ln -sf "$EXECUTABLE" "/usr/local/bin/$APPNAME"
+
+# Tenta encontrar um ícone (opcional)
+ICON=$(find "$INSTALL_DIR" -type f \( -name "*.png" -o -name "*.svg" \) | head -n 1)
+if [ -z "$ICON" ]; then
+    ICON="default"  # Usa o ícone padrão do sistema caso não encontre
+fi
+
+# Cria um atalho no menu de aplicativos
+DESKTOP_FILE="$HOME/.local/share/applications/$APPNAME.desktop"
+
+echo "Criando atalho no menu de aplicativos..."
+echo "[Desktop Entry]
+Name=$APPNAME
+Exec=/usr/local/bin/$APPNAME
+Icon=$ICON
+Type=Application
+Categories=Utility;" > "$DESKTOP_FILE"
+
+chmod +x "$DESKTOP_FILE"
+
+echo "Instalação concluída! Agora você pode executar digitando: $APPNAME"
