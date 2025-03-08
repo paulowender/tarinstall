@@ -18,6 +18,7 @@ fi
 # Obtém o nome do programa sem extensão, removendo padrões comuns
 FILENAME=$(basename "$FILE")
 APPNAME=$(echo "$FILENAME" | sed -E 's/(-linux|-x64|_x64|-amd64|_amd64|.tar.gz)//g')
+APPNAME=$(echo "$APPNAME" | awk '{print toupper(substr($0,1,1)) substr($0,2)}')
 
 # Pergunta ao usuário se deseja alterar o nome
 read -p "Nome do aplicativo (padrão: $APPNAME): " NEWNAME
@@ -38,34 +39,64 @@ echo "Extraindo para $INSTALL_DIR..."
 sudo mkdir -p "$INSTALL_DIR"
 sudo tar -xvzf "$FILE" -C "$INSTALL_DIR" --strip-components=1
 
-# Procura o executável dentro da pasta extraída
+# Procura o executável dentro da pasta extraída no primeiro nível
 EXECUTABLE=$(find "$INSTALL_DIR" -maxdepth 1 -type f -executable | head -n 1)
+
+if [ -z "$EXECUTABLE" ]; then
+    echo "Nenhum executável encontrado no primeiro nível de $INSTALL_DIR."
+    # Verifica se o zenity está instalado para abrir uma janela de seleção
+    if command -v zenity >/dev/null 2>&1; then
+        SELECTED_EXECUTABLE=$(zenity --file-selection --title="Selecione o executável" --filename="$INSTALL_DIR/")
+        if [ -n "$SELECTED_EXECUTABLE" ]; then
+            EXECUTABLE="$SELECTED_EXECUTABLE"
+        else
+            echo "Nenhum executável selecionado. Abortando a instalação."
+            exit 1
+        fi
+    else
+        # Caso zenity não esteja instalado, solicita o caminho manualmente
+        read -p "Digite o caminho do executável (relativo a $INSTALL_DIR): " RELATIVE_PATH
+        EXECUTABLE="$INSTALL_DIR/$RELATIVE_PATH"
+        if [ ! -x "$EXECUTABLE" ]; then
+            echo "O arquivo informado não é executável ou não existe. Abortando a instalação."
+            exit 1
+        fi
+    fi
+fi
 
 if [ -z "$EXECUTABLE" ]; then
     echo "Erro: Nenhum executável encontrado em $INSTALL_DIR"
     exit 1
 fi
 
-# Cria um link simbólico para executar o programa de qualquer lugar
-sudo ln -sf "$EXECUTABLE" "/usr/local/bin/$APPNAME"
+echo "Instalando $EXECUTABLE para /usr/local/bin/$APPNAME..."
 
-# Tenta encontrar um ícone (opcional)
-ICON=$(find "$INSTALL_DIR" -type f \( -name "*.png" -o -name "*.svg" \) | head -n 1)
-if [ -z "$ICON" ]; then
-    ICON="default"  # Usa o ícone padrão do sistema caso não encontre
+# Pergunta ao usuário se deseja criar um atalho
+read -p "Criar atalho (S/n): " CREATE_SHORTCUT
+CREATE_SHORTCUT=${CREATE_SHORTCUT:-Y}
+if [[ "$CREATE_SHORTCUT" =~ ^[Yy]$ ]]; then
+    # Cria um link simbólico para executar o programa de qualquer lugar
+    sudo ln -sf "$EXECUTABLE" "/usr/local/bin/$APPNAME"
+
+    # Tenta encontrar um ícone (opcional)
+    ICON=$(find "$INSTALL_DIR" -type f \( -name "*.png" -o -name "*.svg" \) | head -n 1)
+    if [ -z "$ICON" ]; then
+        ICON="default" # Usa o ícone padrão do sistema caso não encontre
+    fi
+
+    # Cria um atalho no menu de aplicativos
+    DESKTOP_FILE="$HOME/.local/share/applications/$APPNAME.desktop"
+
+    echo "Criando atalho no menu de aplicativos..."
+    echo "[Desktop Entry]
+    Name=$APPNAME
+    Exec=/usr/local/bin/$APPNAME
+    Icon=$ICON
+    Type=Application
+    Categories=Utility;" >"$DESKTOP_FILE"
+
+    # Torna o script executável
+    chmod +x "$DESKTOP_FILE"
 fi
-
-# Cria um atalho no menu de aplicativos
-DESKTOP_FILE="$HOME/.local/share/applications/$APPNAME.desktop"
-
-echo "Criando atalho no menu de aplicativos..."
-echo "[Desktop Entry]
-Name=$APPNAME
-Exec=/usr/local/bin/$APPNAME
-Icon=$ICON
-Type=Application
-Categories=Utility;" > "$DESKTOP_FILE"
-
-chmod +x "$DESKTOP_FILE"
 
 echo "Instalação concluída! Agora você pode executar digitando: $APPNAME"
